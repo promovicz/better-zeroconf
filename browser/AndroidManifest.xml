@@ -5,6 +5,7 @@
     android:versionName="1.0" >
 
     <uses-sdk android:minSdkVersion="10" />
+    <uses-library android:name="better-zeroconf-library" android:required="true"/>
 
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -35,6 +36,10 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name="prom.android.zeroconf.service.ZeroConfService">
+        </service>
+        
     </application>
 
 </manifest>
