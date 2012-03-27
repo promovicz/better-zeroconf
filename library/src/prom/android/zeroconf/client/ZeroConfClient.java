@@ -21,6 +21,7 @@ public class ZeroConfClient {
 	/** Log tag */
 	public final static String TAG = ZeroConfClient.class.toString();
 
+	/* Notification message types */
 	private static final int NOTIFY_UPDATED = 1;
 	private static final int NOTIFY_REMOVED = 2;
 	
