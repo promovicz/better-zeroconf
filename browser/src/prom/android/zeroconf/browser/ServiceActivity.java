@@ -1,11 +1,8 @@
 package prom.android.zeroconf.browser;
 
-import java.net.URL;
-
 import javax.jmdns.ServiceEvent;
 
 import prom.android.zeroconf.model.ZeroConfRecord;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
