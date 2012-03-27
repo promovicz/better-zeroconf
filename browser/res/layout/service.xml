@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical" >
+
+    <TextView
+        android:id="@+id/name"
+        style="@android:style/TextAppearance.Large"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:color/background_dark"
+        android:textColor="@android:color/primary_text_dark" />
+
+    <TableLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:stretchColumns="1" >
+
+        <TableRow android:id="@+id/typeRow">
+
+            <TextView
+                style="@android:style/TextAppearance.Medium"
+                android:background="@android:color/background_dark"
+                android:text="Type"
+                android:textColor="@android:color/primary_text_dark" />
+
+            <TextView
+                android:id="@+id/type"
+                style="@android:style/TextAppearance.Medium"
+                android:gravity="right"
+                android:text="Test"
+                android:textColor="@android:color/secondary_text_dark" />
+        </TableRow>
+        
+        <TableRow android:id="@+id/portRow">
+
+            <TextView
+                style="@android:style/TextAppearance.Medium"
+                android:background="@android:color/background_dark"
+                android:text="Port"
+                android:textColor="@android:color/primary_text_dark" />
+
+            <TextView
+                android:id="@+id/port"
+                style="@android:style/TextAppearance.Medium"
+                android:gravity="right"
+                android:text="Test"
+                android:textColor="@android:color/secondary_text_dark" />
+        </TableRow>
+
+        <TableRow android:id="@+id/protocolRow">
+
+            <TextView
+                style="@android:style/TextAppearance.Medium"
+                android:background="@android:color/background_dark"
+                android:text="Protocol"
+                android:textColor="@android:color/primary_text_dark" />
+
+            <TextView
+                android:id="@+id/protocol"
+                style="@android:style/TextAppearance.Medium"
+                android:gravity="right"
+                android:text="Test"
+                android:textColor="@android:color/secondary_text_dark" />
+        </TableRow>
+
+        <TableRow android:id="@+id/priorityRow">
+
+            <TextView
+                style="@android:style/TextAppearance.Medium"
+                android:background="@android:color/background_dark"
+                android:text="Priority"
+                android:textColor="@android:color/primary_text_dark" />
+
+            <TextView
+                android:id="@+id/priority"
+                style="@android:style/TextAppearance.Medium"
+                android:gravity="right"
+                android:text="42"
+                android:textColor="@android:color/secondary_text_dark" />
+        </TableRow>
+
+        <TableRow android:id="@+id/weightRow">
+
+            <TextView
+                style="@android:style/TextAppearance.Medium"
+                android:background="@android:color/background_dark"
+                android:text="Weight"
+                android:textColor="@android:color/primary_text_dark" />
+
+            <TextView
+                android:id="@+id/weight"
+                style="@android:style/TextAppearance.Medium"
+                android:gravity="right"
+                android:text="23"
+                android:textColor="@android:color/secondary_text_dark" />
+        </TableRow>
+    </TableLayout>
+
+</LinearLayout>
