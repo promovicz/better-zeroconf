@@ -4,6 +4,8 @@ import java.net.URL;
 
 import javax.jmdns.ServiceEvent;
 
+import prom.android.zeroconf.model.ZeroConfRecord;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
@@ -14,27 +16,14 @@ public class ServiceActivity extends Activity {
 
 	public final static String TAG = MainActivity.class.toString();
 
+	ZeroConfRecord record;
+	
 	private TextView nameText;
 	private TextView typeText;
 	private TextView portText;
 	private TextView protocolText;
 	private TextView priorityText;
 	private TextView weightText;
-	
-	String serviceName;
-	String serviceType;
-	String serviceServer;
-	String serviceDomain;
-	String serviceProtocol;
-	String serviceApplication;
-	String serviceSubtype;
-	int servicePort;
-	int servicePriority;
-	int serviceWeight;
-	URL[] serviceURLs;
-	
-	String serviceQualifiedName;
-	String serviceNiceText;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -56,31 +45,18 @@ public class ServiceActivity extends Activity {
 		Log.d(TAG, "Unpacking extras bundle");
 		
 		Intent intent = getIntent();
-		Bundle extras = intent.getExtras();
+		Bundle extras = intent.getExtras();		
 
-		Log.d(TAG, "Bundle: " + extras);
-		
-		serviceName = extras.getString("serviceName");
-		serviceType = extras.getString("serviceType");
-		serviceServer = extras.getString("serviceServer");
-		serviceDomain = extras.getString("serviceDomain");
-		serviceProtocol = extras.getString("serviceProtocol");
-		serviceApplication = extras.getString("serviceApplication");
-		serviceSubtype = extras.getString("serviceSubtype");
-		servicePriority = extras.getInt("servicePriority");
-		serviceWeight = extras.getInt("serviceWeight");
-		servicePort = extras.getInt("servicePort");
-		serviceQualifiedName = extras.getString("serviceQualifiedName");
-		serviceNiceText = extras.getString("serviceNiceText");
+		record = (ZeroConfRecord)extras.getParcelable("record");
 		
 		Log.d(TAG, "Updating user interface");
 		
-		nameText.setText(serviceName);
-		typeText.setText(serviceType);
-		portText.setText(new Integer(servicePort).toString());
-		protocolText.setText(serviceProtocol);		
-		priorityText.setText(new Integer(servicePriority).toString());
-		weightText.setText(new Integer(serviceWeight).toString());
+		nameText.setText(record.name);
+		typeText.setText(record.type);
+		//portText.setText(new Integer(servicePort).toString());
+		//protocolText.setText(serviceProtocol);		
+		//priorityText.setText(new Integer(servicePriority).toString());
+		//weightText.setText(new Integer(serviceWeight).toString());
 	}
 
 	@Override

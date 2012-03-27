@@ -1,22 +1,19 @@
 package prom.android.zeroconf;
 
-import javax.jmdns.ServiceEvent;
-import javax.jmdns.ServiceInfo;
+import java.util.Hashtable;
 
+import prom.android.zeroconf.client.ZeroConfClient;
+import prom.android.zeroconf.model.ZeroConfRecord;
 import android.app.Activity;
-import android.content.ComponentName;
 import android.content.Intent;
-import android.content.ServiceConnection;
-import android.database.DataSetObserver;
-import android.net.wifi.WifiManager;
 import android.os.Bundle;
-import android.os.IBinder;
-import android.os.RemoteException;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.ListAdapter;
+import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -27,12 +24,14 @@ public class MainActivity extends Activity {
 	TextView statusText = null;
 	ListView servicesList = null;
 
-	ZeroConfReceiver zeroConf = null;
+	LayoutInflater layoutInflater;
+	ArrayAdapter<ZeroConfRecord> listAdapter;
 
+	ZeroConfClient client = null;
 
-	IZeroConfService service;
-	ServiceConnection serviceConnection;
-	
+	Hashtable<String, ZeroConfRecord> recordsByKey
+	= new Hashtable<String, ZeroConfRecord>();
+
 	/**
 	 * Activity instance activation
 	 * 
@@ -44,113 +43,51 @@ public class MainActivity extends Activity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		Log.d(TAG, "Creating main activity");
-		
+
 		Log.d(TAG, "Initializing user interface");
+
 		setContentView(R.layout.main);
-		
+
+		layoutInflater = getLayoutInflater();
+
 		statusText = (TextView)findViewById(R.id.status);
-		statusText.setText("Initializing");
+
+		listAdapter = new ArrayAdapter<ZeroConfRecord>(this, R.id.serviceView) {
+			@Override
+			public View getView(int position, View previous, ViewGroup parent) {
+				TextView v = (TextView)previous;
+				if(v == null) {
+					v = (TextView)layoutInflater.inflate(R.layout.main_service, null, false);
+				}
+				ZeroConfRecord r = this.getItem(position);
+				if(r != null) {
+					StringBuffer str = new StringBuffer();
+					str.append(r.name);
+					str.append("\n");
+					str.append(r.type);
+					if(r.urls.length > 0) {
+						for(int i = 0; i < r.urls.length; i++) {
+							str.append("\n");
+							str.append(r.urls[i]);
+						}
+					}
+
+					v.setText(str.toString());
+				}
+				return v;
+			}
+		};
 		
 		servicesList = (ListView)findViewById(R.id.services);
 		servicesList.setClickable(true);
-		
+		servicesList.setAdapter(listAdapter);
+		servicesList.setOnItemClickListener(clickListener);
 
-		
-		Log.d(TAG, "Instantiating mDNS listener");
-		WifiManager wifiManager =
-				(WifiManager)this.getSystemService(WIFI_SERVICE);
-		zeroConf = new ZeroConfReceiver(this, wifiManager);
+		client = new ZeroConfClient(this);
+		client.registerListener(clientListener);
+		client.connectToService();
 
-		Log.d(TAG, "Starting mDNS listener");
-		
-		boolean initialized = false;
-		
-		try {
-			zeroConf.startListening();
-			initialized = true;
-		} catch (Exception e) {
-		}
-		
-		if(initialized) {
-			statusText.setText("Listening");
-		} else {
-			statusText.setText("Failed to start mDNS listener");
-			statusText.setTextColor(0xFF0000);
-		}
-		
-		Log.d(TAG, "Attaching ListView");
-		ListAdapter adapter = zeroConf.getServiceListAdapter();
-		
-		DataSetObserver observer = new DataSetObserver() {
-			@Override
-			public void onChanged() {
-				updateCounts();
-			}
-			@Override
-			public void onInvalidated() {
-			}
-		};
-		adapter.registerDataSetObserver(observer);
-		
-		servicesList.setAdapter(adapter);
-		
-		Log.d(TAG, "Attaching click listener");
-		OnItemClickListener l = new OnItemClickListener() {
-			@Override
-			public void onItemClick(AdapterView<?> parent, View view,
-									int position, long id) {
-				Intent intent = new Intent(view.getContext(), ServiceActivity.class);
-				ZeroConfReceiver.Srv service = (ZeroConfReceiver.Srv)(parent.getAdapter().getItem(position));
-				ServiceEvent lastEvent = service.getLastEvent(); 
-				ServiceInfo serviceInfo = lastEvent.getInfo();
-				intent.putExtra("serviceName", serviceInfo.getName());
-				intent.putExtra("serviceType", serviceInfo.getType());
-				intent.putExtra("servicePort", serviceInfo.getPort());
-				intent.putExtra("serviceServer", serviceInfo.getServer());
-				intent.putExtra("serviceDomain", serviceInfo.getDomain());
-				intent.putExtra("serviceProtocol", serviceInfo.getDomain());
-				intent.putExtra("serviceApplication", serviceInfo.getApplication());
-				intent.putExtra("serviceSubtype", serviceInfo.getSubtype());
-				intent.putExtra("servicePriority", serviceInfo.getPriority());
-				intent.putExtra("serviceWeight", serviceInfo.getWeight());
-				intent.putExtra("serviceURLs", serviceInfo.getURLs());
-				intent.putExtra("serviceQualifiedName", serviceInfo.getQualifiedName());
-				intent.putExtra("serviceNiceText", serviceInfo.getNiceTextString());
-                startActivity(intent);
-			}
-		};
-		servicesList.setOnItemClickListener(l);
-		
-		Log.d(TAG, "Starting service");
-		Intent serviceIntent = new Intent(this, ZeroConfService.class);
-		serviceConnection = new ServiceConnection() {
-			
-			@Override
-			public void onServiceDisconnected(ComponentName name) {
-				Log.d(TAG, "Got disconnect for " + name.toString());
-				if(name.toString() == "prom.android.zeroconf.ZeroConfService") {
-					serviceConnection = null;
-					service = null;
-				}
-			}
-			
-			@Override
-			public void onServiceConnected(ComponentName name, IBinder binder) {
-				Log.d(TAG, "Got service binder for " + name.toString());
-				if(name.toString() == "prom.android.zeroconf.ZeroConfService") {
-					service = (IZeroConfService)binder;
-					try {
-						service.subscribeAll();
-					} catch (RemoteException e) {
-						Log.d(TAG, "Exception while subscribing: " + e.toString());
-					}
-				}
-			}
-		};
-		
-		Log.d(TAG, "Binding!");
-		boolean result = bindService(serviceIntent, serviceConnection, BIND_AUTO_CREATE);
-		Log.d(TAG, "Done binding: " + result);
+		updateStatus();
 	}
 
 	/**
@@ -163,27 +100,56 @@ public class MainActivity extends Activity {
 	protected void onDestroy() {
 		Log.d(TAG, "Destroying activity");
 
-		unbindService(serviceConnection);
-		serviceConnection = null;
-		service = null;
-		
-		Log.d(TAG, "Stopping mDNS listener");
-		zeroConf.stopListening();
+		client.disconnectFromService();
 
 		super.onDestroy();
 	}
-	
 
-	/**
-	 * Update status line with number of services;
-	 */
-	void updateCounts() {
-		int serviceCount = zeroConf.getServiceCount();
-		int typeCount = zeroConf.getTypeCount();
-		String text =
-			+ serviceCount + " services, "
-			+ typeCount + " types";
+	void updateStatus() {
+		String text = recordsByKey.size() + " services";
 		statusText.setText(text);
 	}
-	
+
+	OnItemClickListener clickListener = new OnItemClickListener() {
+		@Override
+		public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+			Intent intent = new Intent(view.getContext(), ServiceActivity.class);
+			ZeroConfRecord record = (ZeroConfRecord)parent.getAdapter().getItem(position);
+			intent.putExtra("record", record);
+			startActivity(intent);
+		}
+	};
+
+	ZeroConfClient.Listener clientListener = new ZeroConfClient.Listener() {
+
+		@Override
+		public void serviceUpdated(ZeroConfRecord record) {
+			if(recordsByKey.containsKey(record.key)) {
+				Log.d(TAG, "Updating service " + record.key);
+				ZeroConfRecord old = recordsByKey.get(record.key);
+				recordsByKey.put(old.key, record);
+				int oldPosition = listAdapter.getPosition(old);
+				listAdapter.insert(record, oldPosition);
+				listAdapter.remove(old);
+			} else {
+				Log.d(TAG, "Adding service " + record.key);
+				recordsByKey.put(record.key, record);
+				listAdapter.add(record);
+			}
+			updateStatus();
+		}
+
+		@Override
+		public void serviceRemoved(ZeroConfRecord record) {
+			Log.d(TAG, "Removing service " + record.key);
+			if(recordsByKey.containsKey(record.key)) {
+				ZeroConfRecord old = recordsByKey.get(record.key);
+				recordsByKey.remove(old.key);
+				listAdapter.remove(old);
+			}
+			updateStatus();
+		}
+	};
+
+
 }
