@@ -1,0 +1,20 @@
+
+Better ZeroConf is a multicast DNS-SD browser application
+and library for the Android platform.
+
+It is implemented using the JmDNS library as an Android service,
+allowing multiple activities within in an application to
+share the service.
+
+To build it, you will need to import the two ADT projects provided
+alongside a "jmdns" project, imported straight from their repository.
+
+Features:
+
+ * based on JmDNS
+ * implemented as a service
+
+Coming soon:
+
+ * publishing support
+
