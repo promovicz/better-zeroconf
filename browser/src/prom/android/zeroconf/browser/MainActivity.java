@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.ArrayAdapter;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -52,28 +53,22 @@ public class MainActivity extends Activity {
 
 		statusText = (TextView)findViewById(R.id.status);
 
-		listAdapter = new ArrayAdapter<ZeroConfRecord>(this, R.id.serviceView) {
+		listAdapter = new ArrayAdapter<ZeroConfRecord>(this, R.layout.main_service, R.id.name) {
 			@Override
 			public View getView(int position, View previous, ViewGroup parent) {
-				TextView v = (TextView)previous;
-				if(v == null) {
-					v = (TextView)layoutInflater.inflate(R.layout.main_service, null, false);
-				}
 				ZeroConfRecord r = this.getItem(position);
-				if(r != null) {
-					StringBuffer str = new StringBuffer();
-					str.append(r.name);
-					str.append("\n");
-					str.append(r.type);
-					if(r.urls.length > 0) {
-						for(int i = 0; i < r.urls.length; i++) {
-							str.append("\n");
-							str.append(r.urls[i]);
-						}
-					}
-
-					v.setText(str.toString());
+				LinearLayout v = (LinearLayout)previous;
+				
+				if(v == null) {
+					v = (LinearLayout)layoutInflater.inflate(R.layout.main_service, null, false);
 				}
+				
+				TextView name = (TextView)v.findViewById(R.id.name);
+				TextView type = (TextView)v.findViewById(R.id.type);
+				
+				name.setText(r.name);
+				type.setText(r.type);
+				
 				return v;
 			}
 		};
