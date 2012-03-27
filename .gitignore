@@ -1,2 +1,4 @@
-bin
-gen
+browser/bin
+browser/gen
+library/bin
+library/gen
