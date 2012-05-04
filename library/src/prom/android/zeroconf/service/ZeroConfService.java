@@ -32,7 +32,7 @@ import android.os.Message;
 import android.os.RemoteException;
 import android.util.Log;
 
-public class ZeroConfService extends Service {
+public class ZeroConfService extends Service implements Runnable {
 
 	public final static String TAG = ZeroConfService.class.toString();
 
@@ -59,6 +59,9 @@ public class ZeroConfService extends Service {
 
 	int allTypeSubscriptions;
 
+	Thread serviceThread;
+	boolean shutdownRequested = false;
+
 	@Override
 	public void onCreate() {
 		super.onCreate();
@@ -72,19 +75,27 @@ public class ZeroConfService extends Service {
 		registerReceiver(connectionStateListener,
 				new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
 
-		Log.d(TAG, "Creating multicast lock");
-		multicastLock = wifiManager.createMulticastLock(MULTICAST_LOCK_TAG);
-		multicastLock.setReferenceCounted(true);
-
-		startDiscovery();
+		Log.d(TAG, "Starting service thread");
+		serviceThread = new Thread(this);
+		serviceThread.start();
 	}
 
 	@Override
 	public void onDestroy() {
 		Log.d(TAG, "Destroying service");
 
-		stopDiscovery();
-
+		Log.d(TAG, "Shutting down service thread");
+		shutdownRequested = true;
+		boolean joined = false;
+		while(!joined) {
+			try {
+				serviceThread.interrupt();
+				serviceThread.join();
+				joined = true;
+			} catch (InterruptedException e) {
+			}
+		}
+		
 		Log.d(TAG, "Unregistering connection state listener");
 		unregisterReceiver(connectionStateListener);
 
@@ -97,19 +108,53 @@ public class ZeroConfService extends Service {
 		return new Connection(intent);
 	}
 
-	void startDiscovery() {
+	private void onWifiChange() {
+		serviceThread.interrupt();
+	}
+
+	public void run() {
+		int lastWifiState = WifiManager.WIFI_STATE_UNKNOWN;
+		// loop until shutdown
+		while(!shutdownRequested) {
+			// depending on wifi connection
+			int currentWifiState = wifiManager.getWifiState();
+			if(currentWifiState != lastWifiState) {
+				if(currentWifiState == WifiManager.WIFI_STATE_ENABLED) {
+					startDiscovery();
+				} else {
+					stopDiscovery();
+				}
+			}
+			lastWifiState = currentWifiState;
+			// idle wait
+			try {
+				Thread.sleep(15000);
+			} catch (InterruptedException e) {
+				// ignored
+			}
+		}
+	}
+
+	private void startDiscovery() {
 		Log.d(TAG, "Attempting to start discovery");
 
-		if(mDNS != null) {
-			Log.d(TAG, "Already running");
+		JmDNS cur = mDNS;
+		if(cur != null) {
+			Log.d(TAG, "Discovery already running");
 			return;
 		}
+		
+		Log.d(TAG, "Creating multicast lock");
+		multicastLock = wifiManager.createMulticastLock(MULTICAST_LOCK_TAG);
+		multicastLock.setReferenceCounted(true);
 
+		Log.d(TAG, "Getting wifi state");
 		if(wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED) {
 			Log.d(TAG, "Wifi state is not enabled");
 			return;
 		}
 
+		Log.d(TAG, "Getting connection info");
 		WifiInfo connInfo = wifiManager.getConnectionInfo();
 		if(connInfo == null) {
 			Log.d(TAG, "Failed to get connection info");
@@ -149,7 +194,7 @@ public class ZeroConfService extends Service {
 		}
 	}
 
-	void stopDiscovery() {
+	private void stopDiscovery() {
 		Log.d(TAG, "Attempting to stop discovery");
 
 		JmDNS cur = mDNS;
@@ -186,27 +231,27 @@ public class ZeroConfService extends Service {
 	 * our service-global database.
 	 * 
 	 */
-	Handler updateNotify = new Handler() {
+	private Handler updateNotify = new Handler() {
 		@Override
 		public void handleMessage(Message msg) {
+			SrvType t;
 			if(msg.what == NOTIFY_TYPE_ADDED) {
 				String name = (String)msg.obj;
-				SrvType t = new SrvType(name);
+				t = ensureType(name);
 				allTypesByName.put(t.typeName, t);
 			} else {
 				ServiceEvent e = (ServiceEvent)msg.obj;
-				SrvType t;
 				Srv s;
 				switch(msg.what) {
 				case NOTIFY_SERVICE_ADDED:
-					t = allTypesByName.get(e.getType());
+					t = ensureType(e.getType());
 					s = new Srv(e);
 					Log.d(TAG, "Adding svc " + e.getName());
 					t.addSrv(s);
 					allServices.insertElementAt(s, 0);
 					break;
 				case NOTIFY_SERVICE_REMOVED:
-					t = allTypesByName.get(e.getType());
+					t = ensureType(e.getType());
 					s = t.getSrvByKey(e.getInfo().getKey());
 					Log.d(TAG, "Removing svc " + e.getName());
 					t.removeSrv(s);
@@ -399,14 +444,9 @@ public class ZeroConfService extends Service {
 	class ConnectionStateListener extends BroadcastReceiver {
 		@Override
 		public void onReceive(Context context, Intent intent) {
-			Log.d(TAG, "Connection state " + intent.toString());
-			if(wifiManager.getWifiState() == WifiManager.WIFI_STATE_ENABLED) {
-				Log.d(TAG, "Wifi is now enabled");
-				startDiscovery();
-			} else {
-				Log.d(TAG, "Wifi is now disabled");
-				stopDiscovery();
-			}
+			boolean status = (wifiManager.getWifiState() == WifiManager.WIFI_STATE_ENABLED);
+			Log.d(TAG, "Connection state is now " + (status ? "enabled" : "disabled"));
+			onWifiChange();
 		}
 	}
 
