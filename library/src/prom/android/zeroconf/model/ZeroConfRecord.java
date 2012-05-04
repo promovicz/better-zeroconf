@@ -41,7 +41,7 @@ public class ZeroConfRecord implements Parcelable {
 
 		this.name = event.getName();
 		this.type = event.getType();
-
+		
 		this.domain = info.getDomain();
 		this.protocol = info.getProtocol();
 		this.application = info.getApplication();
@@ -59,7 +59,6 @@ public class ZeroConfRecord implements Parcelable {
 
 	@Override
 	public int describeContents() {
-		// TODO Auto-generated method stub
 		return 0;
 	}
 
@@ -68,7 +67,7 @@ public class ZeroConfRecord implements Parcelable {
 
 		name = in.readString();
 		type = in.readString();
-
+		
 		domain = in.readString();
 		protocol = in.readString();
 		application = in.readString();
@@ -90,7 +89,7 @@ public class ZeroConfRecord implements Parcelable {
 
 		dest.writeString(name);
 		dest.writeString(type);
-
+		
 		dest.writeString(domain);
 		dest.writeString(protocol);
 		dest.writeString(application);
