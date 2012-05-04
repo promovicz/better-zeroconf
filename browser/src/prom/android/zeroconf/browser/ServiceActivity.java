@@ -1,7 +1,5 @@
 package prom.android.zeroconf.browser;
 
-import javax.jmdns.ServiceEvent;
-
 import prom.android.zeroconf.model.ZeroConfRecord;
 import android.app.Activity;
 import android.content.Intent;
@@ -48,12 +46,7 @@ public class ServiceActivity extends Activity {
 		
 		Log.d(TAG, "Updating user interface");
 		
-		nameText.setText(record.name);
-		typeText.setText(record.type);
-		//portText.setText(new Integer(servicePort).toString());
-		//protocolText.setText(serviceProtocol);		
-		//priorityText.setText(new Integer(servicePriority).toString());
-		//weightText.setText(new Integer(serviceWeight).toString());
+		updateForRecord(record);
 	}
 
 	@Override
@@ -65,9 +58,13 @@ public class ServiceActivity extends Activity {
 	
 	
 	
-	void updateForServiceEvent(ServiceEvent event) {
-		nameText.setText(event.getName());
-		typeText.setText(event.getType());
+	void updateForRecord(ZeroConfRecord record) {
+		nameText.setText(record.name);
+		typeText.setText(record.type);
+		portText.setText(Integer.toString(record.port));
+		protocolText.setText(record.protocol);		
+		priorityText.setText(Integer.toString(record.priority));
+		weightText.setText(Integer.toString(record.weight));
 	}
 
 }
