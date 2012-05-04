@@ -60,7 +60,7 @@ public class ZeroConfService extends Service implements Runnable {
 	int allTypeSubscriptions;
 
 	Thread serviceThread;
-	boolean shutdownRequested = false;
+	boolean serviceShutdownRequested = false;
 
 	@Override
 	public void onCreate() {
@@ -85,7 +85,7 @@ public class ZeroConfService extends Service implements Runnable {
 		Log.d(TAG, "Destroying service");
 
 		Log.d(TAG, "Shutting down service thread");
-		shutdownRequested = true;
+		serviceShutdownRequested = true;
 		boolean joined = false;
 		while(!joined) {
 			try {
@@ -115,7 +115,7 @@ public class ZeroConfService extends Service implements Runnable {
 	public void run() {
 		int lastWifiState = WifiManager.WIFI_STATE_UNKNOWN;
 		// loop until shutdown
-		while(!shutdownRequested) {
+		while(!serviceShutdownRequested) {
 			// depending on wifi connection
 			int currentWifiState = wifiManager.getWifiState();
 			if(currentWifiState != lastWifiState) {
