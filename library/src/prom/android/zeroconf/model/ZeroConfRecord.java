@@ -1,5 +1,9 @@
 package prom.android.zeroconf.model;
 
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Vector;
+
 import javax.jmdns.ServiceEvent;
 import javax.jmdns.ServiceInfo;
 
@@ -29,9 +33,12 @@ public class ZeroConfRecord implements Parcelable {
 	public int weight = 0;
 
 	public String[] urls;
+	
+	private HashMap<String, byte[]> properties;
 
 	public ZeroConfRecord() {
 		this.urls = new String[0];
+		this.properties = new HashMap<String, byte[]>();
 	}
 
 	public void updateFromServiceEvent(ServiceEvent event) {
@@ -55,6 +62,13 @@ public class ZeroConfRecord implements Parcelable {
 		this.weight = info.getWeight();
 
 		this.urls = info.getURLs().clone();
+		
+		this.properties.clear();
+		Enumeration<String> propertyNames = info.getPropertyNames();
+		while(propertyNames.hasMoreElements()) {
+			String propertyName = propertyNames.nextElement();
+			this.properties.put(propertyName, info.getPropertyBytes(propertyName));
+		}
 	}
 
 	@Override
@@ -81,6 +95,16 @@ public class ZeroConfRecord implements Parcelable {
 		weight = in.readInt();
 
 		urls = in.createStringArray();
+		
+		Vector<String> propertyNames = new Vector<String>();
+		in.readStringList(propertyNames);
+		
+		this.properties = new HashMap<String, byte[]>();
+		Enumeration<String> props = propertyNames.elements();
+		while(props.hasMoreElements()) {
+			String propertyName = props.nextElement();
+			this.properties.put(propertyName, in.createByteArray());
+		}
 	}
 
 	@Override
@@ -103,6 +127,16 @@ public class ZeroConfRecord implements Parcelable {
 		dest.writeInt(weight);
 
 		dest.writeStringArray(urls);
+		
+		Vector<String> propertyNames = new Vector<String>(this.properties.keySet());
+		dest.writeStringList(propertyNames);
+		
+		Enumeration<String> props = propertyNames.elements();
+		while(props.hasMoreElements()) {
+			String propertyName = props.nextElement();
+			byte[] propertyValue = this.properties.get(propertyName);
+			dest.writeByteArray(propertyValue);
+		}
 	}
 
 	public static final Parcelable.Creator<ZeroConfRecord> CREATOR
