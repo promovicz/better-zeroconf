@@ -90,4 +90,15 @@
         </TableRow>
     </TableLayout>
 
+    <View
+        android:id="@+id/firstDivider"
+        android:layout_width="fill_parent"
+        android:layout_height="2dp"
+        android:background="#000080" /> <!-- XXX: color -->
+
+    <ListView
+        android:id="@+id/properties"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content" />
+
 </LinearLayout>
