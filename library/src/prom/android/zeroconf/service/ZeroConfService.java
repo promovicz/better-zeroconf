@@ -592,33 +592,30 @@ public class ZeroConfService extends Service implements Runnable {
 		@Override
 		public void serviceAdded(ServiceEvent event) {
 			debugListener("serviceAdded(" + serviceType + " | " + event.getName() + ")");
-			if(mDNS != null) {
-				// notify the main thread
-				sendServiceMessage(NOTIFY_SERVICE_ADDED, event);
 
-				// request resolution of service details
-				mDNS.requestServiceInfo(event.getType(), event.getName(), true);
-			}
+			// notify the main thread
+			sendServiceMessage(NOTIFY_SERVICE_ADDED, event);
+
+			// request resolution of service details
+			mDNS.requestServiceInfo(event.getType(), event.getName(), true);
 		}
 
 		/** Callback method for removing services */
 		@Override
 		public void serviceRemoved(ServiceEvent event) {
 			debugListener("serviceRemoved(" + serviceType + " | " + event.getName() + ")");
-			if(mDNS != null) {
-				// notify the main thread
-				sendServiceMessage(NOTIFY_SERVICE_REMOVED, event);
-			}
+
+			// notify the main thread
+			sendServiceMessage(NOTIFY_SERVICE_REMOVED, event);
 		}
 
 		/** Callback method for resolution results */
 		@Override
 		public void serviceResolved(ServiceEvent event) {
 			debugListener("serviceResolved(" + serviceType + " | "+ event.getName() + ")");
-			if(mDNS != null) {
-				// notify the main thread
-				sendServiceMessage(NOTIFY_SERVICE_RESOLVED, event);
-			}
+
+			// notify the main thread
+			sendServiceMessage(NOTIFY_SERVICE_RESOLVED, event);
 		}
 	}
 
