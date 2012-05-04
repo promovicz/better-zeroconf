@@ -1,7 +1,14 @@
 package prom.android.zeroconf.model;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Vector;
 
 import javax.jmdns.ServiceEvent;
@@ -39,6 +46,37 @@ public class ZeroConfRecord implements Parcelable {
 	public ZeroConfRecord() {
 		this.urls = new String[0];
 		this.properties = new HashMap<String, byte[]>();
+	}
+	
+	public List<String> getPropertyNames() {
+		return new Vector<String>(this.properties.keySet());
+	}
+	
+	public String getPropertyString(String propertyName) {
+		String string = null;
+		CharsetDecoder utf8Decoder =
+			      Charset.forName("UTF8")
+			      .newDecoder()
+			      .onMalformedInput(CodingErrorAction.REPORT);
+		if(this.properties.containsKey(propertyName)) {
+			byte[] propertyValue = this.properties.get(propertyName);
+			ByteBuffer bb = ByteBuffer.wrap(propertyValue);
+			try {
+				CharBuffer cb = utf8Decoder.decode(bb);
+				string = cb.toString();
+			} catch (CharacterCodingException e) {
+				// ignore and return null
+			}
+		}
+		return string;
+	}
+	
+	public byte[] getPropertyBytes(String propertyName) {
+		byte[] data = null;
+		if(this.properties.containsKey(propertyName)) {
+			data = this.properties.get(propertyName).clone();
+		}
+		return data;
 	}
 
 	public void updateFromServiceEvent(ServiceEvent event) {
