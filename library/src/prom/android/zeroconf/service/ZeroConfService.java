@@ -12,6 +12,7 @@ import java.util.Vector;
 
 import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceEvent;
+import javax.jmdns.ServiceInfo;
 import javax.jmdns.ServiceListener;
 import javax.jmdns.ServiceTypeListener;
 
@@ -34,14 +35,16 @@ import android.util.Log;
 
 public class ZeroConfService extends Service implements Runnable {
 
-	public final static String TAG = ZeroConfService.class.toString();
+    public final static String TAG = ZeroConfService.class.getCanonicalName();
 
-	public final static String MULTICAST_LOCK_TAG = ZeroConfService.class.toString();
+    public final static String MULTICAST_LOCK_TAG = ZeroConfService.class.toString();
 
 	private final static int NOTIFY_TYPE_ADDED = 1;
 	private final static int NOTIFY_SERVICE_ADDED = 2;
 	private final static int NOTIFY_SERVICE_REMOVED = 3;
 	private final static int NOTIFY_SERVICE_RESOLVED = 4;
+
+    private final static int SERVICE_SLEEP_INTERVAL = 60000;
 
 	WifiManager wifiManager;
 
@@ -65,7 +68,7 @@ public class ZeroConfService extends Service implements Runnable {
 	@Override
 	public void onCreate() {
 		super.onCreate();
-		Log.d(TAG, "Creating service");
+        Log.i(TAG, "Creating service");
 
 		Log.d(TAG, "Getting wifi manager");
 		wifiManager = (WifiManager)getSystemService(WIFI_SERVICE);
@@ -82,7 +85,7 @@ public class ZeroConfService extends Service implements Runnable {
 
 	@Override
 	public void onDestroy() {
-		Log.d(TAG, "Destroying service");
+        Log.i(TAG, "Destroying service");
 
 		Log.d(TAG, "Shutting down service thread");
 		serviceShutdownRequested = true;
@@ -100,11 +103,13 @@ public class ZeroConfService extends Service implements Runnable {
 		unregisterReceiver(connectionStateListener);
 
 		super.onDestroy();
+
+        stopSelf();
 	}
 
 	@Override
 	public IBinder onBind(Intent intent) {
-		Log.d(TAG, "Binding connection " + intent);
+        Log.i(TAG, "Binding connection " + intent);
 		return new Connection(intent);
 	}
 
@@ -128,14 +133,16 @@ public class ZeroConfService extends Service implements Runnable {
 			lastWifiState = currentWifiState;
 			// idle wait
 			try {
-				Thread.sleep(15000);
+                Thread.sleep(SERVICE_SLEEP_INTERVAL);
 			} catch (InterruptedException e) {
 				// ignored
 			}
 		}
+
+        stopDiscovery();
 	}
 
-	private void startDiscovery() {
+    private synchronized void startDiscovery() {
 		Log.d(TAG, "Attempting to start discovery");
 
 		JmDNS cur = mDNS;
@@ -185,8 +192,12 @@ public class ZeroConfService extends Service implements Runnable {
 
 		Log.d(TAG, "Starting discovery on address " + myAddress);
 		try {
+
 			mDNS = JmDNS.create(myAddress);
 			mDNS.addServiceTypeListener(new SrvTypeListener());
+
+            Log.d(TAG, "Discovery was successfully started, mDNS instance is " + mDNS);
+
 		} catch (IOException e) {
 			Log.d(TAG, "Failed to start discovery: " + e.toString());
 			mDNS = null;
@@ -560,6 +571,34 @@ public class ZeroConfService extends Service implements Runnable {
 			super.finalize();
 		}
 
+        @Override
+        public void registerService(ZeroConfRecord pService) throws RemoteException {
+
+            ServiceInfo serviceInfo = pService.toServiceInfo();
+
+            try {
+
+                synchronized (ZeroConfService.this) {
+
+                    debugConnection("registeringService " + pService.name);
+                    mDNS.registerService(serviceInfo);
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "registering service " + pService.name + " failed: ", e);
+                throw new RemoteException();
+            }
+        }
+
+        @Override
+        public void unregisterService(ZeroConfRecord pService) throws RemoteException {
+
+            ServiceInfo serviceInfo = pService.toServiceInfo();
+            synchronized (ZeroConfService.this) {
+
+                debugConnection("unregisteringService " + pService.name);
+                mDNS.unregisterService(serviceInfo);
+            }
+        }
 	}
 
 	/**

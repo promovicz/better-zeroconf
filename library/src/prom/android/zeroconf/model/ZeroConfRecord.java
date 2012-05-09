@@ -20,7 +20,9 @@ import android.os.Parcelable;
 public class ZeroConfRecord implements Parcelable {
 
 	/** System-wide unique key. */
-	public String key = "";
+	public String serviceKey = "";
+
+    public String clientKey = "";
 
 	/** User-visible service name */
 	public String name = "";
@@ -82,7 +84,7 @@ public class ZeroConfRecord implements Parcelable {
 	public void updateFromServiceEvent(ServiceEvent event) {
 		ServiceInfo info = event.getInfo();
 
-		this.key = info.getKey();
+		this.serviceKey = info.getKey();
 
 		this.name = event.getName();
 		this.type = event.getType();
@@ -109,13 +111,20 @@ public class ZeroConfRecord implements Parcelable {
 		}
 	}
 
+    public ServiceInfo toServiceInfo() {
+
+        return ServiceInfo.create(this.type, this.name, this.subtype, this.port, this.weight, this.priority,
+                this.properties);
+    }
+
 	@Override
 	public int describeContents() {
 		return 0;
 	}
 
 	private ZeroConfRecord(Parcel in) {
-		key = in.readString();
+		serviceKey = in.readString();
+        clientKey = in.readString();
 
 		name = in.readString();
 		type = in.readString();
@@ -147,7 +156,8 @@ public class ZeroConfRecord implements Parcelable {
 
 	@Override
 	public void writeToParcel(Parcel dest, int flags) {
-		dest.writeString(key);
+		dest.writeString(serviceKey);
+        dest.writeString(clientKey);
 
 		dest.writeString(name);
 		dest.writeString(type);

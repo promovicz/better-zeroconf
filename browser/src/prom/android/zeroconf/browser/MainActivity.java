@@ -119,16 +119,16 @@ public class MainActivity extends Activity {
 
 		@Override
 		public void serviceUpdated(ZeroConfRecord record) {
-			if(recordsByKey.containsKey(record.key)) {
-				Log.d(TAG, "Updating service " + record.key);
-				ZeroConfRecord old = recordsByKey.get(record.key);
-				recordsByKey.put(old.key, record);
+            if (recordsByKey.containsKey(record.serviceKey)) {
+                Log.d(TAG, "Updating service " + record.serviceKey);
+                ZeroConfRecord old = recordsByKey.get(record.serviceKey);
+                recordsByKey.put(old.serviceKey, record);
 				int oldPosition = listAdapter.getPosition(old);
 				listAdapter.insert(record, oldPosition);
 				listAdapter.remove(old);
 			} else {
-				Log.d(TAG, "Adding service " + record.key);
-				recordsByKey.put(record.key, record);
+                Log.d(TAG, "Adding service " + record.serviceKey);
+                recordsByKey.put(record.serviceKey, record);
 				listAdapter.add(record);
 			}
 			updateStatus();
@@ -136,14 +136,17 @@ public class MainActivity extends Activity {
 
 		@Override
 		public void serviceRemoved(ZeroConfRecord record) {
-			Log.d(TAG, "Removing service " + record.key);
-			if(recordsByKey.containsKey(record.key)) {
-				ZeroConfRecord old = recordsByKey.get(record.key);
-				recordsByKey.remove(old.key);
+            Log.d(TAG, "Removing service " + record.serviceKey);
+            if (recordsByKey.containsKey(record.serviceKey)) {
+                ZeroConfRecord old = recordsByKey.get(record.serviceKey);
+                recordsByKey.remove(old.serviceKey);
 				listAdapter.remove(old);
 			}
 			updateStatus();
 		}
+
+        public void connectedToService() {
+        }
 	};
 
 

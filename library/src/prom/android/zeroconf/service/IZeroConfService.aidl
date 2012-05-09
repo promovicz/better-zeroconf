@@ -1,6 +1,7 @@
 package prom.android.zeroconf.service;
 
 import prom.android.zeroconf.client.IZeroConfClient;
+import prom.android.zeroconf.model.ZeroConfRecord;
 
 interface IZeroConfService {
 
@@ -15,4 +16,6 @@ interface IZeroConfService {
 	void subscribeType(String type);
 	void unsubscribeType(String type);
 	
+    void registerService(in ZeroConfRecord service);
+    void unregisterService(in ZeroConfRecord service);
 }
