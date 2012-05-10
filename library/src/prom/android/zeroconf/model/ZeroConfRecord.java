@@ -1,5 +1,6 @@
 package prom.android.zeroconf.model;
 
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -54,6 +55,18 @@ public class ZeroConfRecord implements Parcelable {
 		return new Vector<String>(this.properties.keySet());
 	}
 	
+    public void setProperty(String name, String value) {
+
+        try {
+
+            properties.put(name, value.getBytes("UTF8"));
+
+        } catch (UnsupportedEncodingException e) {
+
+            throw new RuntimeException(e);
+        }
+    }
+
 	public String getPropertyString(String propertyName) {
 		String string = null;
 		CharsetDecoder utf8Decoder =
