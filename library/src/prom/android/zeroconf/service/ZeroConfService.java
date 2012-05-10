@@ -35,7 +35,7 @@ import android.util.Log;
 
 public class ZeroConfService extends Service implements Runnable {
 
-    public final static String TAG = ZeroConfService.class.getCanonicalName();
+    public final static String TAG = ZeroConfService.class.getSimpleName();
 
     public final static String MULTICAST_LOCK_TAG = ZeroConfService.class.toString();
 
@@ -103,8 +103,6 @@ public class ZeroConfService extends Service implements Runnable {
 		unregisterReceiver(connectionStateListener);
 
 		super.onDestroy();
-
-        stopSelf();
 	}
 
 	@Override
@@ -142,7 +140,7 @@ public class ZeroConfService extends Service implements Runnable {
         stopDiscovery();
 	}
 
-    private synchronized void startDiscovery() {
+    private void startDiscovery() {
 		Log.d(TAG, "Attempting to start discovery");
 
 		JmDNS cur = mDNS;
@@ -215,7 +213,7 @@ public class ZeroConfService extends Service implements Runnable {
 		}
 		mDNS = null;
 
-		Log.d(TAG, "Removing all services");
+        Log.d(TAG, "Removing all services");
 		Collection<SrvType> types = allTypesByName.values();
 		Iterator<SrvType> i = types.iterator();
 		while(i.hasNext()) {
@@ -223,14 +221,16 @@ public class ZeroConfService extends Service implements Runnable {
 			t.removeAllSrv();
 		}
 
-		Log.d(TAG, "Shutting down listener");
+        Log.d(TAG, "Shutting down listener");
 		try {
+
+            // this takes about 5 seconds
 			cur.close();
 		} catch (IOException e) {
 			// XXX do we care?
 		}
 
-		Log.d(TAG, "Releasing multicast lock");
+        Log.d(TAG, "Releasing multicast lock");
 		multicastLock.release();
 	}
 
@@ -245,7 +245,8 @@ public class ZeroConfService extends Service implements Runnable {
 	private Handler updateNotify = new Handler() {
 		@Override
 		public void handleMessage(Message msg) {
-			SrvType t;
+
+            SrvType t;
 			if(msg.what == NOTIFY_TYPE_ADDED) {
 				String name = (String)msg.obj;
 				t = ensureType(name);
@@ -272,7 +273,7 @@ public class ZeroConfService extends Service implements Runnable {
 					break;
 				}
 			}
-		}
+        }
 	};
 
 	private void sendTypeMessage(int what, String type) {
@@ -572,32 +573,39 @@ public class ZeroConfService extends Service implements Runnable {
 		}
 
         @Override
-        public void registerService(ZeroConfRecord pService) throws RemoteException {
+        public void registerService(final ZeroConfRecord pService) throws RemoteException {
 
-            ServiceInfo serviceInfo = pService.toServiceInfo();
+            Log.d(TAG, "registerService");
 
-            try {
+            // WORKSFORNOW this is a workaround to get this off the main thread
+            new Thread(new Runnable() {
 
-                synchronized (ZeroConfService.this) {
+                @Override
+                public void run() {
 
-                    debugConnection("registeringService " + pService.name);
-                    mDNS.registerService(serviceInfo);
+                    ServiceInfo serviceInfo = pService.toServiceInfo();
+                    Log.d(TAG, "service info text: " + new String(serviceInfo.getTextBytes()));
+
+                    try {
+
+                        debugConnection("registeringService " + pService.name);
+
+                        // this takes up to 8 seconds
+                        mDNS.registerService(serviceInfo);
+
+                    } catch (IOException e) {
+                        Log.e(TAG, "registering service " + pService.name + " failed: ", e);
+                    }
                 }
-            } catch (IOException e) {
-                Log.e(TAG, "registering service " + pService.name + " failed: ", e);
-                throw new RemoteException();
-            }
+            }).start();
         }
 
         @Override
         public void unregisterService(ZeroConfRecord pService) throws RemoteException {
 
             ServiceInfo serviceInfo = pService.toServiceInfo();
-            synchronized (ZeroConfService.this) {
-
-                debugConnection("unregisteringService " + pService.name);
-                mDNS.unregisterService(serviceInfo);
-            }
+            debugConnection("unregisteringService " + pService.name);
+            mDNS.unregisterService(serviceInfo);
         }
 	}
 
@@ -629,14 +637,23 @@ public class ZeroConfService extends Service implements Runnable {
 
 		/** Callback method for adding services */
 		@Override
-		public void serviceAdded(ServiceEvent event) {
+        public void serviceAdded(final ServiceEvent event) {
 			debugListener("serviceAdded(" + serviceType + " | " + event.getName() + ")");
 
-			// notify the main thread
-			sendServiceMessage(NOTIFY_SERVICE_ADDED, event);
+            // WORKSFORNOW this is a workaround to get this off the main thread
+            new Thread(new Runnable() {
 
-			// request resolution of service details
-			mDNS.requestServiceInfo(event.getType(), event.getName(), true);
+                @Override
+                public void run() {
+
+                    // notify the main thread
+                    sendServiceMessage(NOTIFY_SERVICE_ADDED, event);
+
+                    // request resolution of service details
+                    mDNS.requestServiceInfo(event.getType(), event.getName(), false);
+                }
+            }).start();
+
 		}
 
 		/** Callback method for removing services */
