@@ -601,11 +601,19 @@ public class ZeroConfService extends Service implements Runnable {
         }
 
         @Override
-        public void unregisterService(ZeroConfRecord pService) throws RemoteException {
+        public void unregisterService(final ZeroConfRecord pService) throws RemoteException {
 
-            ServiceInfo serviceInfo = pService.toServiceInfo();
-            debugConnection("unregisteringService " + pService.name);
-            mDNS.unregisterService(serviceInfo);
+            // WORKSFORNOW this is a workaround to get this off the main thread
+            new Thread(new Runnable() {
+
+                @Override
+                public void run() {
+
+                    ServiceInfo serviceInfo = pService.toServiceInfo();
+                    debugConnection("unregisteringService " + pService.name);
+                    mDNS.unregisterService(serviceInfo);
+                }
+            }).start();
         }
 	}
 
