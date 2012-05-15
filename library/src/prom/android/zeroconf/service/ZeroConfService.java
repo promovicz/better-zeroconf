@@ -9,9 +9,14 @@ import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Vector;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceEvent;
+import javax.jmdns.ServiceInfo;
 import javax.jmdns.ServiceListener;
 import javax.jmdns.ServiceTypeListener;
 
@@ -34,14 +39,16 @@ import android.util.Log;
 
 public class ZeroConfService extends Service implements Runnable {
 
-	public final static String TAG = ZeroConfService.class.toString();
+    public final static String TAG = ZeroConfService.class.getSimpleName();
 
-	public final static String MULTICAST_LOCK_TAG = ZeroConfService.class.toString();
+    public final static String MULTICAST_LOCK_TAG = ZeroConfService.class.toString();
 
 	private final static int NOTIFY_TYPE_ADDED = 1;
 	private final static int NOTIFY_SERVICE_ADDED = 2;
 	private final static int NOTIFY_SERVICE_REMOVED = 3;
 	private final static int NOTIFY_SERVICE_RESOLVED = 4;
+
+    private final static int SERVICE_SLEEP_INTERVAL = 60000;
 
 	WifiManager wifiManager;
 
@@ -62,10 +69,15 @@ public class ZeroConfService extends Service implements Runnable {
 	Thread serviceThread;
 	boolean serviceShutdownRequested = false;
 
+    private final ReentrantLock DISCOVERY_STARTUP_LOCK = new ReentrantLock();
+
+    private ThreadPoolExecutor registrationExecutor = new ThreadPoolExecutor(1, 3, 30, TimeUnit.SECONDS,
+            new LinkedBlockingDeque<Runnable>());
+
 	@Override
 	public void onCreate() {
 		super.onCreate();
-		Log.d(TAG, "Creating service");
+        Log.i(TAG, "Creating service");
 
 		Log.d(TAG, "Getting wifi manager");
 		wifiManager = (WifiManager)getSystemService(WIFI_SERVICE);
@@ -82,7 +94,7 @@ public class ZeroConfService extends Service implements Runnable {
 
 	@Override
 	public void onDestroy() {
-		Log.d(TAG, "Destroying service");
+        Log.i(TAG, "Destroying service");
 
 		Log.d(TAG, "Shutting down service thread");
 		serviceShutdownRequested = true;
@@ -104,7 +116,7 @@ public class ZeroConfService extends Service implements Runnable {
 
 	@Override
 	public IBinder onBind(Intent intent) {
-		Log.d(TAG, "Binding connection " + intent);
+        Log.i(TAG, "Binding connection " + intent);
 		return new Connection(intent);
 	}
 
@@ -128,70 +140,80 @@ public class ZeroConfService extends Service implements Runnable {
 			lastWifiState = currentWifiState;
 			// idle wait
 			try {
-				Thread.sleep(15000);
+                Thread.sleep(SERVICE_SLEEP_INTERVAL);
 			} catch (InterruptedException e) {
 				// ignored
 			}
 		}
+
+        stopDiscovery();
 	}
 
-	private void startDiscovery() {
-		Log.d(TAG, "Attempting to start discovery");
+    private void startDiscovery() {
 
-		JmDNS cur = mDNS;
-		if(cur != null) {
-			Log.d(TAG, "Discovery already running");
-			return;
-		}
-		
-		Log.d(TAG, "Creating multicast lock");
-		multicastLock = wifiManager.createMulticastLock(MULTICAST_LOCK_TAG);
-		multicastLock.setReferenceCounted(true);
+        DISCOVERY_STARTUP_LOCK.lock();
+        try {
 
-		Log.d(TAG, "Getting wifi state");
-		if(wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED) {
-			Log.d(TAG, "Wifi state is not enabled");
-			return;
-		}
+            Log.d(TAG, "Attempting to start discovery");
 
-		Log.d(TAG, "Getting connection info");
-		WifiInfo connInfo = wifiManager.getConnectionInfo();
-		if(connInfo == null) {
-			Log.d(TAG, "Failed to get connection info");
-			return;
-		}
+            JmDNS cur = mDNS;
+            if (cur != null) {
+                Log.d(TAG, "Discovery already running");
+                return;
+            }
 
-		// XXX ugly
-		int myRawAddress = connInfo.getIpAddress();
-		byte[] myAddressBytes = new byte[] {
-				(byte) (myRawAddress & 0xff),
-				(byte) (myRawAddress >> 8 & 0xff),
-				(byte) (myRawAddress >> 16 & 0xff),
-				(byte) (myRawAddress >> 24 & 0xff)
-		};
+            Log.d(TAG, "Creating multicast lock");
+            multicastLock = wifiManager.createMulticastLock(MULTICAST_LOCK_TAG);
+            multicastLock.setReferenceCounted(true);
 
-		InetAddress myAddress;
-		try {
-			myAddress = InetAddress.getByAddress(myAddressBytes);
-		} catch (UnknownHostException e) {
-			Log.d(TAG, "Failed to get address: " + e.toString());
-			return;
-		}
+            Log.d(TAG, "Getting wifi state");
+            if (wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED) {
+                Log.d(TAG, "Wifi state is not enabled");
+                return;
+            }
 
-		Log.d(TAG, "My address is " + myAddress.toString());
+            Log.d(TAG, "Getting connection info");
+            WifiInfo connInfo = wifiManager.getConnectionInfo();
+            if (connInfo == null) {
+                Log.d(TAG, "Failed to get connection info");
+                return;
+            }
 
-		Log.d(TAG, "Acquiring multicast lock");
-		multicastLock.acquire();
+            // XXX ugly
+            int myRawAddress = connInfo.getIpAddress();
+            byte[] myAddressBytes = new byte[] { (byte) (myRawAddress & 0xff), (byte) (myRawAddress >> 8 & 0xff),
+                    (byte) (myRawAddress >> 16 & 0xff), (byte) (myRawAddress >> 24 & 0xff) };
 
-		Log.d(TAG, "Starting discovery on address " + myAddress);
-		try {
-			mDNS = JmDNS.create(myAddress);
-			mDNS.addServiceTypeListener(new SrvTypeListener());
-		} catch (IOException e) {
-			Log.d(TAG, "Failed to start discovery: " + e.toString());
-			mDNS = null;
-			multicastLock.release();
-		}
+            InetAddress myAddress;
+            try {
+                myAddress = InetAddress.getByAddress(myAddressBytes);
+            } catch (UnknownHostException e) {
+                Log.d(TAG, "Failed to get address: " + e.toString());
+                return;
+            }
+
+            Log.d(TAG, "My address is " + myAddress.toString());
+
+            Log.d(TAG, "Acquiring multicast lock");
+            multicastLock.acquire();
+
+            Log.d(TAG, "Starting discovery on address " + myAddress);
+            try {
+
+                mDNS = JmDNS.create(myAddress);
+                mDNS.addServiceTypeListener(new SrvTypeListener());
+
+                Log.d(TAG, "Discovery was successfully started, mDNS instance is " + mDNS);
+
+            } catch (IOException e) {
+                Log.d(TAG, "Failed to start discovery: " + e.toString());
+                mDNS = null;
+                multicastLock.release();
+            }
+        } finally {
+
+            DISCOVERY_STARTUP_LOCK.unlock();
+        }
 	}
 
 	private void stopDiscovery() {
@@ -204,7 +226,7 @@ public class ZeroConfService extends Service implements Runnable {
 		}
 		mDNS = null;
 
-		Log.d(TAG, "Removing all services");
+        Log.d(TAG, "Removing all services");
 		Collection<SrvType> types = allTypesByName.values();
 		Iterator<SrvType> i = types.iterator();
 		while(i.hasNext()) {
@@ -212,14 +234,16 @@ public class ZeroConfService extends Service implements Runnable {
 			t.removeAllSrv();
 		}
 
-		Log.d(TAG, "Shutting down listener");
+        Log.d(TAG, "Shutting down listener");
 		try {
+
+            // this takes about 5 seconds
 			cur.close();
 		} catch (IOException e) {
 			// XXX do we care?
 		}
 
-		Log.d(TAG, "Releasing multicast lock");
+        Log.d(TAG, "Releasing multicast lock");
 		multicastLock.release();
 	}
 
@@ -234,7 +258,8 @@ public class ZeroConfService extends Service implements Runnable {
 	private Handler updateNotify = new Handler() {
 		@Override
 		public void handleMessage(Message msg) {
-			SrvType t;
+
+            SrvType t;
 			if(msg.what == NOTIFY_TYPE_ADDED) {
 				String name = (String)msg.obj;
 				t = ensureType(name);
@@ -261,7 +286,7 @@ public class ZeroConfService extends Service implements Runnable {
 					break;
 				}
 			}
-		}
+        }
 	};
 
 	private void sendTypeMessage(int what, String type) {
@@ -560,6 +585,84 @@ public class ZeroConfService extends Service implements Runnable {
 			super.finalize();
 		}
 
+        @Override
+        public void registerService(final ZeroConfRecord pService) throws RemoteException {
+
+            Log.d(TAG, "registerService");
+
+            registrationExecutor.execute(new Runnable() {
+
+                @Override
+                public void run() {
+
+                    ServiceInfo serviceInfo = pService.toServiceInfo();
+
+                    try {
+
+                        debugConnection("registerService " + pService.name);
+
+                        if (DISCOVERY_STARTUP_LOCK.isLocked()) {
+
+                            // wait until discovery startup is complete
+                            debugConnection("but first we'll wait until discovery startup is complete");
+
+                            DISCOVERY_STARTUP_LOCK.lock();
+                            DISCOVERY_STARTUP_LOCK.unlock();
+                            debugConnection("okay, discovery startup is done");
+                        }
+
+                        // WORKSFORNOW fixes a race condition, but this is suboptimal
+                        if (mDNS == null) {
+
+                            // service is already shutdown
+                            return;
+                        }
+
+                        debugConnection("registering: name='" + pService.name + "', type='" + pService.type + "'");
+                        mDNS.registerService(serviceInfo);
+                        debugConnection("registerService " + pService.name + " is done");
+
+                    } catch (IOException e) {
+                        Log.e(TAG, "registering service " + pService.name + " failed: ", e);
+                    }
+                }
+            });
+        }
+
+        @Override
+        public void unregisterService(final ZeroConfRecord pService) throws RemoteException {
+
+            registrationExecutor.execute(new Runnable() {
+
+                @Override
+                public void run() {
+
+                    ServiceInfo serviceInfo = pService.toServiceInfo();
+                    debugConnection("unregisterService name='" + pService.name + "', clientKey='"
+                            + pService.clientKey + "'");
+
+                    if (DISCOVERY_STARTUP_LOCK.isLocked()) {
+
+                        // wait until discovery startup is complete
+                        debugConnection("but first we'll wait until discovery startup is complete");
+
+                        DISCOVERY_STARTUP_LOCK.lock();
+                        DISCOVERY_STARTUP_LOCK.unlock();
+                        debugConnection("okay, discovery startup is done");
+                    }
+
+                    // WORKSFORNOW fixes a race condition, but this is suboptimal
+                    if (mDNS == null) {
+
+                        // service is already shutdown
+                        return;
+                    }
+
+                    mDNS.unregisterService(serviceInfo);
+                    debugConnection("unregisterService name='" + pService.name + "' is done");
+                }
+            });
+        }
 	}
 
 	/**
@@ -590,14 +693,43 @@ public class ZeroConfService extends Service implements Runnable {
 
 		/** Callback method for adding services */
 		@Override
-		public void serviceAdded(ServiceEvent event) {
+        public void serviceAdded(final ServiceEvent event) {
 			debugListener("serviceAdded(" + serviceType + " | " + event.getName() + ")");
 
-			// notify the main thread
-			sendServiceMessage(NOTIFY_SERVICE_ADDED, event);
+            // WORKSFORNOW this is a workaround to get this off the main thread
+            new Thread(new Runnable() {
 
-			// request resolution of service details
-			mDNS.requestServiceInfo(event.getType(), event.getName(), true);
+                @Override
+                public void run() {
+
+                    // notify the main thread
+                    sendServiceMessage(NOTIFY_SERVICE_ADDED, event);
+
+                    if (DISCOVERY_STARTUP_LOCK.isLocked()) {
+
+                        // wait until discovery startup is complete
+                        debugListener("but first we'll wait until discovery is complete");
+
+                        DISCOVERY_STARTUP_LOCK.lock();
+
+                        DISCOVERY_STARTUP_LOCK.unlock();
+                        debugListener("okay, discovery startup is done");
+                    }
+
+                    // WORKSFORNOW fixes a race condition, but this is suboptimal
+                    if (mDNS == null) {
+
+                        // service is already shutdown
+                        return;
+                    }
+
+                    // TESTING
+                    // if ("_hoccer._tcp.local.".equals(event.getType())) {
+                        mDNS.requestServiceInfo(event.getType(), event.getName(), false);
+                    // }
+                }
+            }).start();
+
 		}
 
 		/** Callback method for removing services */

@@ -1,6 +1,8 @@
 package prom.android.zeroconf.client;
 
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Vector;
 
 import prom.android.zeroconf.model.ZeroConfRecord;
@@ -19,11 +21,13 @@ import android.util.Log;
 public class ZeroConfClient {
 
 	/** Log tag */
-	public final static String TAG = ZeroConfClient.class.toString();
+    public final static String TAG = ZeroConfClient.class.getSimpleName();
 
 	/* Notification message types */
 	private static final int NOTIFY_UPDATED = 1;
 	private static final int NOTIFY_REMOVED = 2;
+    private static final int NOTIFY_CONNECTED = 3;
+    private static final int NOTIFY_DISCONNECTED = 4;
 	
 	/** Context of this client, used for service binding */
 	private Context clientContext;
@@ -34,6 +38,15 @@ public class ZeroConfClient {
 	/** Vector of all our listeners */
 	private Vector<Listener> listeners = new Vector<Listener>();
 
+    /** All records that have been registered using this client */
+    private final HashMap<String, ZeroConfRecord> registeredRecords;
+
+    /** All records that should be registered but aren't yet registered */
+    private final HashMap<String, ZeroConfRecord> toBeRegistered;
+
+    /** All records that should be unregistered but aren't yet unregistered */
+    private final HashSet<String> toBeUnregistered;
+
 	/**
 	 * Public constructor
 	 * 
@@ -43,7 +56,12 @@ public class ZeroConfClient {
 	 * @param context must be provided
 	 */
 	public ZeroConfClient(Context context) {
+
 		this.clientContext = context;
+
+        registeredRecords = new HashMap<String, ZeroConfRecord>();
+        toBeRegistered = new HashMap<String, ZeroConfRecord>();
+        toBeUnregistered = new HashSet<String>();
 	}
 	
 	/**
@@ -85,7 +103,106 @@ public class ZeroConfClient {
 		
 		// unbind from service
 		clientContext.unbindService(serviceConnection);
+        service = null;
 	}
+
+    /**
+     * Registers an mDNS service announcement.
+     * 
+     * @param the
+     *            service record to announce
+     * @return true if the service is connected and the service record was registered, false otherwise
+     */
+    public boolean registerService(ZeroConfRecord record) {
+        
+        Log.d(TAG, "registerService name='" + record.name + "', clientKey='" + record.clientKey + "', type='"
+                + record.type + "'");
+
+        if (registeredRecords.containsKey(record.clientKey)) {
+
+            // it's already registered
+            return true;
+        }
+
+        if (service == null) {
+
+            Log.d(TAG, "ZeroConf service is not connected, registering service record later.");
+            toBeRegistered.put(record.clientKey, record);
+            toBeUnregistered.remove(record);
+            return false;
+        }
+
+        try {
+
+            service.registerService(record);
+            registeredRecords.put(record.clientKey, record);
+            return true;
+
+        } catch (RemoteException e) {
+
+            Log.e(TAG, "Exception while registering service: ", e);
+            return false;
+        }
+    }
+
+    /**
+     * Unregisters an mDNS service announcement.
+     * 
+     * @return true if the service is connected and unregistering was successful, false otherwise
+     */
+    public boolean unregisterService(String clientKey) {
+
+        Log.d(TAG, "unregisterService, clientKey='" + clientKey + "'");
+
+        ZeroConfRecord record = registeredRecords.get(clientKey);
+        if (record == null) {
+
+            // can't unregister if it's not been registered
+            Log.d(TAG, "Can't unregister service, the record is unknown.");
+            return false;
+        }
+
+        if (service == null) {
+
+            // not connected - unregister once the connection comes back up
+            Log.d(TAG, "ZeroConf service is not connected, unregistering service record later.");
+            toBeUnregistered.add(clientKey);
+            toBeRegistered.remove(clientKey);
+            return false;
+        }
+
+        try {
+
+            service.unregisterService(record);
+            registeredRecords.remove(clientKey);
+
+            Log.d(TAG, "Service unregistered.");
+            return true;
+
+        } catch (RemoteException e) {
+
+            Log.e(TAG, "Exception while unregistering service: ", e);
+            return false;
+        }
+    }
+
+    public boolean isServiceRegistered(String clientKey) {
+
+        return registeredRecords.containsKey(clientKey);
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+
+        Log.d(TAG, "finalize");
+
+        for (ZeroConfRecord record : registeredRecords.values()) {
+
+            service.unregisterService(record);
+        }
+
+        disconnectFromService();
+    }
 
 	/**
 	 * Convenient listener interface
@@ -95,6 +212,8 @@ public class ZeroConfClient {
 	public interface Listener {
 		void serviceUpdated(ZeroConfRecord record);
 		void serviceRemoved(ZeroConfRecord record);
+
+        void connectedToService();
 	}
 	
 	/**
@@ -128,20 +247,26 @@ public class ZeroConfClient {
 			Enumeration<Listener> e = listeners.elements();
 			switch(msg.what) {
 			case NOTIFY_UPDATED:
-				debugClient("Dispatching serviceUpdated(" + r.key + ")");
+                // debugClient("Dispatching serviceUpdated(" + r.serviceKey + ")");
 				while(e.hasMoreElements()) {
 					Listener l = e.nextElement();
 					l.serviceUpdated(r);
 				}
 				break;
 			case NOTIFY_REMOVED:
-				debugClient("Dispatching serviceRemoved(" + r.key + ")");
+                // debugClient("Dispatching serviceRemoved(" + r.serviceKey + ")");
 				while(e.hasMoreElements()) {
 					Listener l = e.nextElement();
 					l.serviceRemoved(r);
 				}
 				break;
-			}
+			case NOTIFY_CONNECTED:
+			    while (e.hasMoreElements()) {
+			        Listener l = e.nextElement();
+			        l.connectedToService();
+			    }
+			    break;
+            }
 		}
 	};
 	
@@ -183,14 +308,40 @@ public class ZeroConfClient {
 				debugClient("Registering callbacks");
 				service.registerCallbacks(callbacks);
 				service.subscribeAll();
-			} catch (RemoteException e) {
-				Log.d(TAG, "Exception while subscribing: " + e.toString());
+            } catch (RemoteException e) {
+                Log.d(TAG, "Exception while subscribing: " + e.toString());
+            }
+
+            for (ZeroConfRecord record : toBeRegistered.values()) {
+                try {
+                    Log.d(TAG, "registering service " + record.clientKey);
+                    service.registerService(record);
+                    toBeRegistered.remove(record.clientKey);
+                    registeredRecords.put(record.clientKey, record);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "Exception while registering service: ", e);
+                }
 			}
-		}
+
+            for (String clientKey : toBeUnregistered) {
+                try {
+                    Log.d(TAG, "unregistering service " + clientKey);
+                    service.unregisterService(registeredRecords.get(clientKey));
+                    toBeUnregistered.remove(clientKey);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "Exception while registering service: ", e);
+                }
+            }
+
+            Message msg = Message.obtain(updateNotify, NOTIFY_CONNECTED);
+            updateNotify.sendMessage(msg);
+        }
 		@Override
 		public void onServiceDisconnected(ComponentName name) {
 			debugClient("Disconnected from service");
 			service = null;
+            Message msg = Message.obtain(updateNotify, NOTIFY_DISCONNECTED);
+            updateNotify.sendMessage(msg);
 		}
 	};
 }

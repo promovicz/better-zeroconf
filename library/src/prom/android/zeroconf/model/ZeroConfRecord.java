@@ -1,5 +1,6 @@
 package prom.android.zeroconf.model;
 
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -16,11 +17,16 @@ import javax.jmdns.ServiceInfo;
 
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.util.Log;
 
 public class ZeroConfRecord implements Parcelable {
 
+    private static final String LOG_TAG = ZeroConfRecord.class.getSimpleName();
+
 	/** System-wide unique key. */
-	public String key = "";
+	public String serviceKey = "";
+
+    public String clientKey = "";
 
 	/** User-visible service name */
 	public String name = "";
@@ -52,6 +58,18 @@ public class ZeroConfRecord implements Parcelable {
 		return new Vector<String>(this.properties.keySet());
 	}
 	
+    public void setProperty(String name, String value) {
+
+        try {
+
+            properties.put(name, value.getBytes("UTF8"));
+
+        } catch (UnsupportedEncodingException e) {
+
+            throw new RuntimeException(e);
+        }
+    }
+
 	public String getPropertyString(String propertyName) {
 		String string = null;
 		CharsetDecoder utf8Decoder =
@@ -82,7 +100,7 @@ public class ZeroConfRecord implements Parcelable {
 	public void updateFromServiceEvent(ServiceEvent event) {
 		ServiceInfo info = event.getInfo();
 
-		this.key = info.getKey();
+		this.serviceKey = info.getKey();
 
 		this.name = event.getName();
 		this.type = event.getType();
@@ -102,12 +120,32 @@ public class ZeroConfRecord implements Parcelable {
 		this.urls = info.getURLs().clone();
 		
 		this.properties.clear();
+
+        if (info.getType() != null && info.getType().contains("hoccer")) {
+
+            Log.d(LOG_TAG, "updating properties for " + event.getName());
+            Log.d(LOG_TAG, "service record text: " + new String(event.getInfo().getTextBytes()));
+            Enumeration<String> propertyNames = info.getPropertyNames();
+            while (propertyNames.hasMoreElements()) {
+
+                String propertyName = propertyNames.nextElement();
+                Log.d(LOG_TAG, " - " + propertyName);
+            }
+        }
+
 		Enumeration<String> propertyNames = info.getPropertyNames();
 		while(propertyNames.hasMoreElements()) {
+
 			String propertyName = propertyNames.nextElement();
 			this.properties.put(propertyName, info.getPropertyBytes(propertyName));
 		}
 	}
+
+    public ServiceInfo toServiceInfo() {
+
+        return ServiceInfo.create(this.type, this.name, this.subtype, this.port, this.weight, this.priority,
+                this.properties);
+    }
 
 	@Override
 	public int describeContents() {
@@ -115,7 +153,8 @@ public class ZeroConfRecord implements Parcelable {
 	}
 
 	private ZeroConfRecord(Parcel in) {
-		key = in.readString();
+		serviceKey = in.readString();
+        clientKey = in.readString();
 
 		name = in.readString();
 		type = in.readString();
@@ -147,7 +186,8 @@ public class ZeroConfRecord implements Parcelable {
 
 	@Override
 	public void writeToParcel(Parcel dest, int flags) {
-		dest.writeString(key);
+		dest.writeString(serviceKey);
+        dest.writeString(clientKey);
 
 		dest.writeString(name);
 		dest.writeString(type);
