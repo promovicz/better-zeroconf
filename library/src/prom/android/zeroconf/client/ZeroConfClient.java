@@ -192,7 +192,7 @@ public class ZeroConfClient {
     }
 
     @Override
-    public void finalize() throws Throwable {
+    protected void finalize() throws Throwable {
 
         Log.d(TAG, "finalize");
 
