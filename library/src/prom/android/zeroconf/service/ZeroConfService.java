@@ -9,6 +9,9 @@ import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Vector;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.jmdns.JmDNS;
@@ -67,6 +70,9 @@ public class ZeroConfService extends Service implements Runnable {
 	boolean serviceShutdownRequested = false;
 
     private final ReentrantLock DISCOVERY_STARTUP_LOCK = new ReentrantLock();
+
+    private ThreadPoolExecutor registrationExecutor = new ThreadPoolExecutor(1, 3, 30, TimeUnit.SECONDS,
+            new LinkedBlockingDeque<Runnable>());
 
 	@Override
 	public void onCreate() {
@@ -584,8 +590,7 @@ public class ZeroConfService extends Service implements Runnable {
 
             Log.d(TAG, "registerService");
 
-            // WORKSFORNOW this is a workaround to get this off the main thread
-            new Thread(new Runnable() {
+            registrationExecutor.execute(new Runnable() {
 
                 @Override
                 public void run() {
@@ -599,10 +604,9 @@ public class ZeroConfService extends Service implements Runnable {
                         if (DISCOVERY_STARTUP_LOCK.isLocked()) {
 
                             // wait until discovery startup is complete
-                            debugConnection("but first we'll wait until discovery is complete");
+                            debugConnection("but first we'll wait until discovery startup is complete");
 
                             DISCOVERY_STARTUP_LOCK.lock();
-
                             DISCOVERY_STARTUP_LOCK.unlock();
                             debugConnection("okay, discovery startup is done");
                         }
@@ -622,14 +626,13 @@ public class ZeroConfService extends Service implements Runnable {
                         Log.e(TAG, "registering service " + pService.name + " failed: ", e);
                     }
                 }
-            }).start();
+            });
         }
 
         @Override
         public void unregisterService(final ZeroConfRecord pService) throws RemoteException {
 
-            // WORKSFORNOW this is a workaround to get this off the main thread
-            new Thread(new Runnable() {
+            registrationExecutor.execute(new Runnable() {
 
                 @Override
                 public void run() {
@@ -641,10 +644,9 @@ public class ZeroConfService extends Service implements Runnable {
                     if (DISCOVERY_STARTUP_LOCK.isLocked()) {
 
                         // wait until discovery startup is complete
-                        debugConnection("but first we'll wait until discovery is complete");
+                        debugConnection("but first we'll wait until discovery startup is complete");
 
                         DISCOVERY_STARTUP_LOCK.lock();
-
                         DISCOVERY_STARTUP_LOCK.unlock();
                         debugConnection("okay, discovery startup is done");
                     }
@@ -659,7 +661,7 @@ public class ZeroConfService extends Service implements Runnable {
                     mDNS.unregisterService(serviceInfo);
                     debugConnection("unregisterService name='" + pService.name + "' is done");
                 }
-            }).start();
+            });
         }
 	}
 
@@ -721,8 +723,10 @@ public class ZeroConfService extends Service implements Runnable {
                         return;
                     }
 
-                    // request resolution of service details
-                    mDNS.requestServiceInfo(event.getType(), event.getName(), false);
+                    // TESTING
+                    // if ("_hoccer._tcp.local.".equals(event.getType())) {
+                        mDNS.requestServiceInfo(event.getType(), event.getName(), false);
+                    // }
                 }
             }).start();
 
