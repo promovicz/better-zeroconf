@@ -21,7 +21,7 @@ import android.util.Log;
 public class ZeroConfClient {
 
 	/** Log tag */
-    public final static String TAG = ZeroConfClient.class.getCanonicalName();
+    public final static String TAG = ZeroConfClient.class.getSimpleName();
 
 	/* Notification message types */
 	private static final int NOTIFY_UPDATED = 1;
@@ -115,8 +115,8 @@ public class ZeroConfClient {
      */
     public boolean registerService(ZeroConfRecord record) {
         
-        Log.d(TAG, "registerService('" + record.name + "', '" + record.instance + "', '" + record.type + "', '"
-                + record.clientKey + "')");
+        Log.d(TAG, "registerService name='" + record.name + "', clientKey='" + record.clientKey + "', type='"
+                + record.type + "'");
 
         if (registeredRecords.containsKey(record.clientKey)) {
 
@@ -152,12 +152,13 @@ public class ZeroConfClient {
      */
     public boolean unregisterService(String clientKey) {
 
-        Log.d(TAG, "unregisterService('" + clientKey + "')");
+        Log.d(TAG, "unregisterService, clientKey='" + clientKey + "'");
 
         ZeroConfRecord record = registeredRecords.get(clientKey);
         if (record == null) {
 
             // can't unregister if it's not been registered
+            Log.d(TAG, "Can't unregister service, the record is unknown.");
             return false;
         }
 
@@ -174,6 +175,8 @@ public class ZeroConfClient {
 
             service.unregisterService(record);
             registeredRecords.remove(clientKey);
+
+            Log.d(TAG, "Service unregistered.");
             return true;
 
         } catch (RemoteException e) {
@@ -181,6 +184,24 @@ public class ZeroConfClient {
             Log.e(TAG, "Exception while unregistering service: ", e);
             return false;
         }
+    }
+
+    public boolean isServiceRegistered(String clientKey) {
+
+        return registeredRecords.containsKey(clientKey);
+    }
+
+    @Override
+    public void finalize() throws Throwable {
+
+        Log.d(TAG, "finalize");
+
+        for (ZeroConfRecord record : registeredRecords.values()) {
+
+            service.unregisterService(record);
+        }
+
+        disconnectFromService();
     }
 
 	/**
@@ -226,14 +247,14 @@ public class ZeroConfClient {
 			Enumeration<Listener> e = listeners.elements();
 			switch(msg.what) {
 			case NOTIFY_UPDATED:
-				debugClient("Dispatching serviceUpdated(" + r.serviceKey + ")");
+                // debugClient("Dispatching serviceUpdated(" + r.serviceKey + ")");
 				while(e.hasMoreElements()) {
 					Listener l = e.nextElement();
 					l.serviceUpdated(r);
 				}
 				break;
 			case NOTIFY_REMOVED:
-				debugClient("Dispatching serviceRemoved(" + r.serviceKey + ")");
+                // debugClient("Dispatching serviceRemoved(" + r.serviceKey + ")");
 				while(e.hasMoreElements()) {
 					Listener l = e.nextElement();
 					l.serviceRemoved(r);

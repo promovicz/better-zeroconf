@@ -17,8 +17,11 @@ import javax.jmdns.ServiceInfo;
 
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.util.Log;
 
 public class ZeroConfRecord implements Parcelable {
+
+    private static final String LOG_TAG = ZeroConfRecord.class.getSimpleName();
 
 	/** System-wide unique key. */
 	public String serviceKey = "";
@@ -117,8 +120,22 @@ public class ZeroConfRecord implements Parcelable {
 		this.urls = info.getURLs().clone();
 		
 		this.properties.clear();
+
+        if (info.getType() != null && info.getType().contains("hoccer")) {
+
+            Log.d(LOG_TAG, "updating properties for " + event.getName());
+            Log.d(LOG_TAG, "service record text: " + new String(event.getInfo().getTextBytes()));
+            Enumeration<String> propertyNames = info.getPropertyNames();
+            while (propertyNames.hasMoreElements()) {
+
+                String propertyName = propertyNames.nextElement();
+                Log.d(LOG_TAG, " - " + propertyName);
+            }
+        }
+
 		Enumeration<String> propertyNames = info.getPropertyNames();
 		while(propertyNames.hasMoreElements()) {
+
 			String propertyName = propertyNames.nextElement();
 			this.properties.put(propertyName, info.getPropertyBytes(propertyName));
 		}
